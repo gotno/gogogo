@@ -1,0 +1,77 @@
+class ParamScrambler
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    queries = env["QUERY_STRING"].split("&")
+    queries.map! do |query|
+      key = query.split("=")[0]
+      value = query.split("=")[1].split("+").shuffle.join("+")
+      "#{key}=#{value}"
+    end
+    env["QUERY_STRING"] = queries.join("&")
+
+    @app.call(env)
+  end
+end
+
+class Timer
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    start_time = Time.now
+    status, headers, body = @app.call(env)
+
+    duration = Time.now - start_time
+    body.write("\n duration of execution: #{duration}s")
+
+    [ status, headers, body ]
+  end
+end
+
+class FirstToRespond
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    status, headers, body = @app.call(env)
+
+    body.write("\n\nfirst!\n")
+
+    [ status, headers, body ]
+  end
+end
+
+class TakesSooooLong
+  def initialize(app)
+    @app = app
+  end
+
+  def call(env)
+    10_000_000.times do
+      Math.sqrt(5)
+    end
+    @app.call(env)
+  end
+end
+
+class GoAheadThen
+  def self.call(env)
+    request = Rack::Request.new(env)
+    response = Rack::Response.new
+
+    response.status = 200
+    response.write(request.params.inspect)
+    response.finish
+  end
+end
+
+use Timer
+use FirstToRespond
+use ParamScrambler
+use TakesSooooLong
+run GoAheadThen
